@@ -18,14 +18,14 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 // 1. Intercept Transaction
 app.post('/api/transaction', async (req, res) => {
     const { recipientPhone, amount, type } = req.body;
-    
+
     // Step A: Check Monitor (AT Insights)
     const phoneStatus = await verifyPhoneNumberStatus(recipientPhone);
-    
+
     // Step B: Evaluate Rules
     const isHighValue = amount > 1000;
     const isRisky = phoneStatus.status === 'RISKY';
-    
+
     const txData = {
         id: generateId(),
         recipientPhone,
@@ -38,12 +38,12 @@ app.post('/api/transaction', async (req, res) => {
         // Needs second signature (Voice Gate)
         pendingTransactions.set(txData.id, txData);
         await triggerAdminVoiceCall(txData.id);
-        
+
         // Log the anomaly/attempt to Stellar
         await logTransactionToStellar({ ...txData, status: 'BLOCKED_PENDING_APPROVAL', reason: phoneStatus.reason });
-        
-        return res.status(202).json({ 
-            success: false, 
+
+        return res.status(202).json({
+            success: false,
             message: "Transaction flagged. Waiting for Admin Voice Authorization.",
             txId: txData.id,
             flags: { isHighValue, isRisky, reason: phoneStatus.reason }
@@ -52,7 +52,7 @@ app.post('/api/transaction', async (req, res) => {
 
     // Step C: Auto-Approve (Normal TX)
     await logTransactionToStellar({ ...txData, status: 'APPROVED' });
-    
+
     res.json({ success: true, message: "Transaction processed securely.", txId: txData.id });
 });
 
@@ -61,7 +61,7 @@ app.post('/api/voice/callback', async (req, res) => {
     // AT sends digits pressed by the user
     // e.g., dtmfDigits: '1'
     const { dtmfDigits, callerNumber } = req.body;
-    
+
     let responseAction = '<Say>An error occurred.</Say>';
 
     if (dtmfDigits === '1') {
@@ -90,7 +90,7 @@ app.post('/api/voice/callback', async (req, res) => {
 
 // 3. Mock Endpoint for Frontend to simulate the Admin pressing '1' or '2'
 app.post('/api/mock-voice-approve', async (req, res) => {
-    const { txId, action } = req.body; 
+    const { txId, action } = req.body;
     const tx = pendingTransactions.get(txId);
     if (!tx) return res.status(404).json({ error: "No pending tx found" });
 
@@ -106,7 +106,7 @@ app.post('/api/mock-voice-approve', async (req, res) => {
 // 4. Secure logging retrieval
 app.get('/api/logs', async (req, res) => {
     const logs = await getLedgerLogs();
-    
+
     const failedAttempts = logs.filter(l => l.data.status.includes('REJECTED') || l.data.status.includes('BLOCKED')).length;
     const healthScore = Math.max(100 - (failedAttempts * 10), 0);
 
@@ -116,3 +116,4 @@ app.get('/api/logs', async (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`GuardianNode Proxy running on port ${PORT}`));
+g
